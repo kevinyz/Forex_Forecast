@@ -1,0 +1,80 @@
+---
+title: "Model Accuracy"
+author: "Kevin Yildiz"
+date: "30 April 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.width=10, fig.height=6) 
+knitr::opts_chunk$set(echo = FALSE)
+
+if (!require("here")) install.packages("here")
+library(here)
+
+source(here::here("setup.R"))
+
+test_results <- readRDS(paste0(results_path,"/all_results.rds"))
+```
+
+
+```{r}
+model_list <- c("svm","dt","lstm","arima","Ensemble")
+split_names <- c("d", "dr", "h", "hr")
+
+accuracy_matrices <- lapply(test_results, function(backtest_split) {
+  split_results <- lapply(backtest_split, function(df_test) {
+    model_accuracy <- lapply(model_list, function(model_spec) {
+      if (model_spec == "arima") {
+        df_test[,model_spec] <- c(0,df_test[2:nrow(df_test),model_spec])
+      }
+      conf_matrix <- suppressWarnings(confusionMatrix(as.factor(df_test[,model_spec]),
+                                                      as.factor(df_test[,"Target"])))
+      
+      conf_matrix[['overall']][['Accuracy']]
+    })
+  })
+
+  results_matrix <- split_results %>% 
+    unlist() %>% 
+    matrix(nrow = length(train_test_splits), 
+           ncol = length(model_list), 
+           byrow = F)
+  
+  results_matrix <- cbind(results_matrix, rowMeans(results_matrix))
+  
+  
+  test_years <- lapply(train_test_splits, function(x) x[[2]]) %>% unlist()
+  
+  colnames(results_matrix) <- c(test_years, "AVG")
+  rownames(results_matrix) <- c("SVM","DT","LSTM","ARIMA","ENSEMBLE")
+  
+  return (results_matrix)
+})
+```
+
+## Results
+
+### Daily
+
+```{r}
+knitr::kable(accuracy_matrices[["backtest_daily"]])
+```
+
+### Daily Reduced
+
+```{r}
+knitr::kable(accuracy_matrices[["backtest_daily_reduced"]])
+```
+
+### Hourly
+
+```{r}
+knitr::kable(accuracy_matrices[["backtest_hourly"]])
+```
+
+### Hourly Reduced
+
+```{r}
+knitr::kable(accuracy_matrices[["backtest_hourly_reduced"]])
+```
